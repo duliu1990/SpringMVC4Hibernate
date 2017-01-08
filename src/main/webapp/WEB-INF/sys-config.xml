@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:jee="http://www.springframework.org/schema/jee"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans-4.3.xsd 
+        http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-4.3.xsd
+        http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.3.xsd
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd
+        http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.3.xsd">
+
+	<context:property-placeholder location="classpath:jdbc.properties" />
+
+	<!-- Session Factory -->
+	<bean id="sessionFactory" class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+		<property name="dataSource" ref="devnpDS" />
+		<property name="hibernateProperties" ref="sampleHibernateProperties" />
+		<property name="packagesToScan">
+			<list>
+				<value>com.devnp.to</value>
+			</list>
+		</property>
+	</bean>
+
+	<!-- Hibernate Properties -->
+	<bean id="sampleHibernateProperties" class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+		<property name="properties">
+			<props>
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<prop key="hibernate.dialect">${hibernate.dialect}</prop>
+				<!-- <prop key="hibernate.query.substitutions">true 'T', false 'F'</prop> -->
+				<prop key="hibernate.jdbc.batch_size">30</prop>
+
+				<prop key="hibernate.show_sql">true</prop>
+				<prop key="hibernate.format_sql">true</prop>
+
+				<!-- For Envers Configurations, to specify here -->
+				<prop key="org.hibernate.envers.auditTableSuffix">_AUD</prop>
+				<prop key="org.hibernate.envers.revisionTypeFieldName">REV_TYPE</prop>
+				<prop key="org.hibernate.envers.doNotAuditOptimisticLockingField">false</prop>
+			</props>
+		</property>
+	</bean>
+
+	<!-- TransactionManager -->
+	<bean id="transactionManager" class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory" />
+	</bean>
+
+	<tx:annotation-driven transaction-manager="transactionManager" />
+
+	<bean id="hibernateTemplate" class="org.springframework.orm.hibernate4.HibernateTemplate">
+		<constructor-arg name="sessionFactory" ref="sessionFactory" />
+	</bean>
+
+	<!-- For Transparent Exception Translation -->
+	<bean id="persistenceExceptionInterceptor"
+		class="org.springframework.dao.support.PersistenceExceptionTranslationInterceptor" />
+
+	<aop:config>
+		<aop:advisor advice-ref="persistenceExceptionInterceptor"
+			pointcut="execution(* *..dao.*DAO(..))" />
+	</aop:config>
+
+	<!-- txAdvice -->
+	<tx:advice id="txAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<tx:method name="get*" read-only="true" />
+			<tx:method name="*" propagation="REQUIRED" />
+
+			<tx:method name="save" propagation="REQUIRED" />
+
+			<!-- <tx:method name="create*" propagation="REQUIRED" /> <tx:method name="update*" 
+				propagation="REQUIRED" /> <tx:method name="delete*" propagation="REQUIRED" 
+				/> <tx:method name="*" read-only="true"/> -->
+
+		</tx:attributes>
+	</tx:advice>
+
+	<!-- uses JDK Dynamic Proxy instead of CGLIB Proxy, default proxy-target-class="false" -->
+	<aop:config>
+		<aop:pointcut id="interceptorPointCuts" expression="execution(* *..service.*Service+.*(..))" />
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="interceptorPointCuts" />
+	</aop:config>
+
+
+	<!-- Datasource START -->
+	<jee:jndi-lookup id="devnpDS" jndi-name="jdbc/devnpDS"
+		lookup-on-startup="false" proxy-interface="javax.sql.DataSource"
+		cache="true" resource-ref="true" />
+	<!-- Datasource END -->
+</beans>
